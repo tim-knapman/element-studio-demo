@@ -1,0 +1,108 @@
+<!-- Cache bust v2 -->
+<section class="gamezone display-{{ content.settings.display }}" id="{{ block_id }}">
+  {% if content.heading.icon %}
+    <div class="gamezone__header has-icon">
+      <div class="gamezone__header-icon">
+        {% if content.heading.icon.svgCode %}
+          {{ content.heading.icon.svgCode|raw }}
+        {% elseif content.heading.icon.icon %}
+          <i class="{{ content.heading.icon.icon }}"></i>
+        {% endif %}
+      </div>
+      <h2 class="gamezone__title">{{ content.heading.heading }}</h2>
+    </div>
+  {% else %}
+    <div class="gamezone__header">
+      <h2 class="gamezone__title">{{ content.heading.heading }}</h2>
+    </div>
+  {% endif %}
+  <div class="gamezone__selectors">
+    <div class="gamezone__competition">
+      {% if seasons_data %}
+        <select class="gamezone__competition-select">
+          {% for season in seasons_data %}
+            <option value="{{ season.season_name }}" {% if session.year == season.season_name %}selected{% endif %}>
+                {{ season.season_name }}
+            </option>
+          {% endfor %}
+        </select>
+      {% endif %}
+    </div>
+    <div class="gamezone__seasons">
+      {% if competitions_data %}
+        <select class="gamezone__season-select">
+          {% for competition in competitions_data %}
+            <option value="{{ competition.competition_id }}" {% if session.competition_post_id == competition.competition_id %}selected{% endif %}>
+                {{ competition.post_title }}
+            </option>
+          {% endfor %}
+        </select>
+      {% else %}
+        <p>nothing  found</p>
+      {% endif %}
+    </div>
+    <div class="gamezone__grades">
+      {% if grades_data %}
+        <select class="gamezone__grades-select">
+          {% for grade in grades_data %}
+            {% set grade_id = grade.id %}
+            {% set grade_name = grade.name %}
+            <option value="{{ grade_id }}" {% if session.grade_id == grade_id %}selected{% endif %}>{{ grade_name }}</option>
+          {% endfor %}
+        </select>
+      {% else %}
+        <p>No grades found for this competition.</p>
+      {% endif %}
+    </div>
+  </div>
+  {% if content.settings.display == 'combined' %}
+    <div class="gamezone__tabs">
+      <div class="gamezone__tabs-tab active" id="matches">
+        <h2 class="gamezone__tabs-title">Recent Matches</h2>
+      </div>
+      <div class="gamezone__tabs-tab" id="ladders">
+        <h2 class="gamezone__tabs-title">Ladder</h2>
+      </div>
+    </div>
+  {% endif %}
+  <div class="gamezone__wrapper">
+    {% if content.settings.display == 'combined' or content.settings.display == 'matches' %}
+      <div class="gamezone__recent active" id="recent-matches">
+        <div class="gamezone__recent-list">
+          {% if matches_html %}
+            {{ matches_html|raw }}
+          {% else %}
+            <p>No matches found for this grade.</p>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+    {% if content.settings.display == 'combined' or content.settings.display == 'ladders' %}
+    
+      <div class="gamezone__ladder" id="ladders-details">
+        <div class="gamezone__ladder-list simple">
+          {% if ladders_html %}
+            {{ ladders_html|raw }}
+          {% else %}
+            <p>No ladder found for this grade.</p>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+    
+    <div class="gamezone__loading">
+        <p class="gamezone__loading-text">Loading</p>
+        <div class="gamezone__loading-spinner">
+          <svg class="spinner" viewBox="0 0 50 50">
+            <defs>
+              <linearGradient id="spinnerGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="29%" stop-color="#2563eb" />
+                <stop offset="30%" stop-color="#dd3748" />
+              </linearGradient>
+            </defs>
+            <circle class="path" cx="25" cy="25" r="20" fill="none" stroke-width="5" stroke="url(#spinnerGradient)"></circle>
+          </svg>
+        </div>
+      </div>
+  </div>
+</section>

@@ -1,0 +1,61 @@
+%%SELECTOR%% {
+}
+
+/* Header Styles */
+%%SELECTOR%% .gamezone__header {
+  margin-bottom: 1.5rem;
+}
+
+%%SELECTOR%% .gamezone__header.has-icon {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+%%SELECTOR%% .gamezone__header-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+%%SELECTOR%% .gamezone__title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0;
+  color: #333;
+}
+
+/* Selectors Container */
+%%SELECTOR%% .gamezone__selectors {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+/* Select Dropdowns */
+%%SELECTOR%% .gamezone__competition-select,
+%%SELECTOR%% .gamezone__grades-select {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background-color: #fff;
+  cursor: pointer;
+  transition: border-color 0.3s ease;
+}
+
+%%SELECTOR%% .gamezone__competition-select:hover,
+%%SELECTOR%% .gamezone__grades-select:hover {
+  border-color: #999;
+}
+
+%%SELECTOR%% .gamezone__competition-select:focus,
+%%SELECTOR%% .gamezone__grades-select:focus {
+  outline: none;
+  border-color: #0066cc;
+  box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
+}
