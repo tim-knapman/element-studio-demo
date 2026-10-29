@@ -60,6 +60,12 @@ class Gamezone extends \Breakdance\Elements\Element
 
     static function template()
     {
+        // Rendered server-side in ssr() so data is passed to Twig as variables, never as template source
+        return '%%SSR%%';
+    }
+
+    static function ssr($propertiesData, $parentPropertiesData = [], $isBuilder = false, $repeaterItemNodeId = null)
+    {
         // Start session if not already started
         if (session_status() === PHP_SESSION_NONE) {
             session_start();
@@ -68,7 +74,6 @@ class Gamezone extends \Breakdance\Elements\Element
         // Fetch seasons and inject as a global variable
         if (function_exists('get_field')) {
             $seasons = get_field('seasons', 'option') ?: [];
-            error_log('CACHE BUST v3 - First season season_data type: ' . gettype($seasons[0]['season_data'] ?? 'not set'));
             if (isset($seasons[0]['season_data'][0])) {
                 error_log('First season_data item type: ' . gettype($seasons[0]['season_data'][0]));
                 error_log('First season_data item: ' . print_r($seasons[0]['season_data'][0], true));
@@ -77,6 +82,12 @@ class Gamezone extends \Breakdance\Elements\Element
             if (!isset($_SESSION['year']) && !empty($seasons)) {
                 $_SESSION['year'] = $seasons[0]['season_name'];
             }
+            if( !isset($_SESSION['season_id']) && !empty($seasons) && isset($seasons[0]['season_data'][0]) ) {
+                $_SESSION['season_id'] = $seasons[0] ?? null;
+                $season_post_id = $seasons[0]['season_data'][0];
+                $_SESSION['season_id'] = get_post_meta( $season_post_id, 'season_id', true );
+            }
+
             
             // Convert season_data - handle both WP_Post objects and post IDs
             $seasons_converted = [];
@@ -172,7 +183,7 @@ class Gamezone extends \Breakdance\Elements\Element
                 $_SESSION['grade_id'] = $grades[0]['id'];
             }
         } else {
-            debug_to_console( 'No competition id set in session, determining from year.' );
+            // debug_to_console( 'No competition id set in session, determining from year.' );
             $seasons = get_field('seasons', 'option') ?: [];
             foreach( $seasons as $season) {
                 if ($season['season_name'] === $_SESSION['year']) {
@@ -182,7 +193,6 @@ class Gamezone extends \Breakdance\Elements\Element
                         $grade_order = get_post_meta( $season['season_data'][0], 'season_id', true );
                         if (!empty($grade_order)) {
                             $_SESSION['grade_id'] = $grade_order[0];
-                            debug_to_console( 'set grade id to: ' . $_SESSION['grade_id'] );
                         }
                         // break;
                     }
@@ -192,51 +202,30 @@ class Gamezone extends \Breakdance\Elements\Element
         }
         
         // Fetch rounds and matches
-        // $_SESSION['grade_id'] = '5a078cfe-dcc4-492c-b8f5-cab992ee27a2';
         $matches_data = [];
         if (isset($_SESSION['grade_id']) && !empty($_SESSION['grade_id']) && function_exists('get_seasons_rounds')) {
             $rounds = get_seasons_rounds($_SESSION['grade_id']);
-            
-            if ($rounds !== "No rounds found for this grade.") {
-                $matches_to_show = get_field('matches') ?: 6;
-                
-                // Set round_id if not set
-                if (!empty($rounds) && isset($rounds[0]['id'])) {
+            if (!empty($rounds) && is_array($rounds)) {
+                $current_round = self::currentRoundIndex($rounds);
+
+                // Default to the latest round that has been played
+                if (isset($rounds[$current_round]['id'])) {
                     if (!isset($_SESSION['round_id']) || empty($_SESSION['round_id']) || $_SESSION['round_id'] == 'null') {
-                        $_SESSION['round_id'] = $rounds[0]['id'];
+                        $_SESSION['round_id'] = $rounds[$current_round]['id'];
                     }
                 }
                 
                 $position = 1;
-                $delayStart = 0.125;
-                
-                // Get display setting from content controls
-                $display = isset($propertiesData['content']['settings']['display']) ? $propertiesData['content']['settings']['display'] : 'combined';
-                
-                if ($display == 'matches') {
-                    // Show matches for selected round only
-                    $delayStart = 0.25;
-                    foreach ($rounds as $round) {
-                        if (isset($_SESSION['round_id']) && $_SESSION['round_id'] == $round['id']) {
-                            if (isset($round['matches'])) {
-                                foreach ($round['matches'] as $match) {
-                                    $match['delay'] = $delayStart * $position;
-                                    $matches_data[] = $match;
-                                    $position++;
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    // Show limited matches from all rounds
-                    foreach ($rounds as $round) {
-                        if (isset($round['matches']) && $position <= $matches_to_show) {
+                $delayStart = 0.25;
+
+                // Show matches for the selected round (Matches and Combined both have the rounds dropdown)
+                foreach ($rounds as $round) {
+                    if (isset($_SESSION['round_id']) && $_SESSION['round_id'] == $round['id']) {
+                        if (isset($round['matches'])) {
                             foreach ($round['matches'] as $match) {
-                                if ($position <= $matches_to_show) {
-                                    $match['delay'] = $delayStart * $position;
-                                    $matches_data[] = $match;
-                                    $position++;
-                                }
+                                $match['delay'] = $delayStart * $position;
+                                $matches_data[] = $match;
+                                $position++;
                             }
                         }
                     }
@@ -260,19 +249,40 @@ class Gamezone extends \Breakdance\Elements\Element
         }
 
         $ladders_data = [];
+        $selectedLadderType = null;
         if (isset($_SESSION['grade_id']) && !empty($_SESSION['grade_id']) && function_exists('get_ladder')) {
-            $ladders_data = get_ladder($_SESSION['grade_id'], 'overall' );
+            $availableTypes = function_exists('get_ladder_types') ? get_ladder_types($_SESSION['grade_id']) : [];
+            $sessionType = isset($_SESSION['ladder_type']) ? $_SESSION['ladder_type'] : null;
+
+            if ($sessionType && in_array($sessionType, $availableTypes, true)) {
+                $selectedLadderType = $sessionType;
+            } elseif (in_array('overall', $availableTypes, true)) {
+                $selectedLadderType = 'overall';
+            } elseif (!empty($availableTypes)) {
+                $selectedLadderType = $availableTypes[0];
+            }
+
+            if ($selectedLadderType) {
+                $_SESSION['ladder_type'] = $selectedLadderType;
+                $ladders_data = get_ladder($_SESSION['grade_id'], $selectedLadderType);
+            }
+        }
+
+        $rounds_data = [];
+        if( isset($_SESSION['grade_id']) && !empty($_SESSION['grade_id']) && function_exists('get_seasons_rounds')) {
+            $rounds_data = get_seasons_rounds($_SESSION['grade_id']);
         }
 
         // Render ladders HTML
         $ladders_html = '';
         if (!empty($ladders_data) && is_array($ladders_data)) {
-            $ladderTypes = get_ladder_types( $_SESSION['grade_id'] );
-            $type = 'overall';
-            $ladder = get_ladder( $_SESSION['grade_id'], $type );
+            $ladderTypes = function_exists('get_ladder_types') ? get_ladder_types($_SESSION['grade_id']) : [];
+            $type = $selectedLadderType ?: 'overall';
+            $ladder = get_ladder($_SESSION['grade_id'], $type);
             $headers = $ladder[0];
             $standings = $ladder[1];
             $position = 1;
+            $delayStart = 0.25;
             ob_start();
             ?>
             <div class="gamezone__ladder-list-wrapper">
@@ -284,88 +294,120 @@ class Gamezone extends \Breakdance\Elements\Element
                         <span class="gamezone__ladder-header-title">Team</span>
                     </div>
                     <?php foreach( $headers as $header ) : ?>
-                    <div class="gamezone__ladder-line-item" data-heading="<?php echo $header['key']; ?>">
-                        <span class="gamezone__ladder-header-title"><?php echo $header['shortName']; ?></span>
+                    <div class="gamezone__ladder-line-item" data-heading="<?php echo esc_attr( $header['key'] ); ?>">
+                        <span class="gamezone__ladder-header-title"><?php echo esc_html( $header['shortName'] ); ?></span>
                     </div>
                     <?php $headings[] = $header['key']; ?>
                     <?php endforeach; ?>
                 </div>
                 <?php foreach( $standings as $standing ) : ?>
                 <?php 
-                    $logo = get_team_logo( $standing['team']['id'], $_SESSION['competition_id'], $cursor = 'null' );
-
+                    $logo = get_team_logo( $standing['team']['id'], $_SESSION['season_id'], $cursor = 'null' );
                     $delay = $delayStart * $position;
                 ?>
                 <div class="gamezone__ladder-line wow fadeInUp row-<?php echo $position; ?>" data-wow-delay="<?php echo $delay; ?>s">
-                  <div class="gamezone__ladder-line-item" data-heading="position">
+                    <div class="gamezone__ladder-line-item" data-heading="position">
                     <p><?php echo $position; ?></p>  
-                  </div>
-                  <div class="gamezone__ladder-line-item" data-heading="team-name">
+                    </div>
+                    <div class="gamezone__ladder-line-item" data-heading="team-name" data-team-id="<?php echo esc_attr( $standing['team']['id'] ); ?>" >
                     <div class="gamezone__ladder-team">
-                      <div class="gamezone__ladder-line-logo">
-                        <?php if( $logo != 'NOTHING Error' ) : ?>
-                          <img src="<?php echo $logo; ?>" alt="<?php echo $standing['team']['name']; ?> logo" class="gamezone__ladder-team-logo">
+                        <div class="gamezone__ladder-line-logo">
+                        <?php if( $logo != 'empty' && $logo != 'NOTHING Error' ) : ?>
+                            <img src="<?php echo esc_url( $logo ); ?>" alt="<?php echo esc_attr( $standing['team']['name'] ); ?> logo" class="gamezone__ladder-team-logo">
                         <?php else : ?>
-                          <div class="gamezone__ladder-team-logo no-image"></div>
+                            <div class="gamezone__ladder-team-logo no-image"></div>
                         <?php endif; ?>
-                      </div>
-                      <span class="gamezone__ladder-team-name"><?php echo $standing['team']['name']; ?></span>
+                        </div>
+                        <span class="gamezone__ladder-team-name"><?php echo esc_html( $standing['team']['name'] ); ?></span>
                     </div>  
-                  </div>
-                  <?php $count = 0; ?>
-                  <?php foreach( $standing['values'] as $value ) : ?>
-                    <div class="gamezone__ladder-line-item" data-heading="<?php echo $headings[$count]; ?>">
-                      <div class="gamezone__ladder-line-item-wrapper">
-                        <span class="gamezone__ladder-team-value"><?php echo $value; ?></span>
-                      </div>
+                    </div>
+                    <?php $count = 0; ?>
+                    <?php foreach( $standing['values'] as $value ) : ?>
+                    <div class="gamezone__ladder-line-item" data-heading="<?php echo esc_attr( $headings[$count] ); ?>">
+                        <div class="gamezone__ladder-line-item-wrapper">
+                        <span class="gamezone__ladder-team-value">
+                            <?php if( $headings[$count] == 'netRunRate' ) : ?>
+                                <?php echo number_format( (float)$value, 3 ); ?>
+                            <?php else : ?>
+                                <?php echo esc_html( $value ); ?>
+                            <?php endif; ?>
+                        </span>
+                        </div>
                     </div>
                     <?php $count++; ?>
-                  <?php endforeach; ?>
-                  <?php $position++; ?>
+                    <?php endforeach; ?>
+                    <?php $position++; ?>
                 </div>
-              <?php endforeach; ?>
+                <?php endforeach; ?>
             </div>
             <?php
             $ladders_html = ob_get_clean();
         }
+
+        $ladder_types = [];
+        if (!empty($ladders_data) && is_array($ladders_data)) {
+            $ladderTypes = function_exists('get_ladder_types') ? get_ladder_types($_SESSION['grade_id']) : [];
+            $nameMap = [
+                'overall' => 'Overall',
+                'oneDay' => 'One Day',
+                't20' => 'T20',
+                'twoDay' => 'Two Day',
+            ];
+            foreach ($ladderTypes as $lt) {
+                $pretty = isset($nameMap[$lt]) ? $nameMap[$lt] : ucwords(preg_replace('/([a-z])([A-Z])/', '$1 $2', (string)$lt));
+                $ladder_types[] = ['type' => $lt, 'name' => $pretty];
+            }
+        }
         
+        // The template source stays constant (one compiled cache file); all data goes in as context
         $template = file_get_contents(__DIR__ . '/html.twig');
-        
-        // Debug: Check the first season's first post
-        if (isset($seasons[0]['season_data'][0])) {
-            error_log('First post before JSON: ' . print_r($seasons[0]['season_data'][0], true));
+
+        return \Breakdance\Render\Twig::getInstance()->runTwig($template, array_merge((array) $propertiesData, [
+            'block_id' => 'gamezone-' . uniqid(),
+            'seasons_data' => $seasons,
+            'session' => $_SESSION,
+            'competitions_data' => $competitions,
+            'grades_data' => $grades,
+            'matches_data' => $matches_data,
+            'rounds_data' => $rounds_data,
+            'matches_html' => $matches_html,
+            'ladders_html' => $ladders_html,
+            'ladder_types' => $ladder_types,
+        ]));
+    }
+
+    /**
+     * Index of the latest round whose first game has started (Round 1 if none have).
+     * Walks forward and stops at the first unstarted round, so the per-match fallback lookup stays cheap.
+     */
+    static function currentRoundIndex($rounds)
+    {
+        $current = 0;
+        foreach (array_values($rounds) as $index => $round) {
+            $start = isset($round['matches'][0]) ? self::gameStartTime($round['matches'][0]) : null;
+            if ($start === null || $start > time()) {
+                break;
+            }
+            $current = $index;
         }
-        
-        // Encode data properly for Twig with newline escaping
-        $seasons_json = json_encode($seasons, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES);
-        if ($seasons_json === false) {
-            error_log('Failed to encode seasons JSON: ' . json_last_error_msg());
-            $seasons_json = '[]';
+        return $current;
+    }
+
+    static function gameStartTime($game)
+    {
+        $schedule = $game['schedule'] ?? null;
+        if (!$schedule && !empty($game['id']) && function_exists('get_match_summary')) {
+            // The round listing may not include the schedule; the match summary does
+            $summary = get_match_summary($game['id']);
+            $schedule = $summary['schedule'] ?? null;
         }
-        $session_json = json_encode($_SESSION, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES);
-        $competition_json = json_encode($competitions, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES);
-        $grades_json = json_encode($grades, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES);
-        $matches_json = json_encode($matches_data, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES);
-        $ladders_json = json_encode($ladders_html, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES);
-        
-        // For HTML content, escape for safe embedding in Twig without unicode encoding
-        $matches_html_escaped = str_replace(['\\', '"', "\n", "\r"], ['\\\\', '\\"', '\\n', '\\r'], $matches_html);
-        $ladders_html_escaped = str_replace(['\\', '"', "\n", "\r"], ['\\\\', '\\"', '\\n', '\\r'], $ladders_html);
-        
-        // Generate a unique block ID
-        $block_id = 'gamezone-' . uniqid();
-        
-        // Inject at the start of the template
-        $injected_vars = "{% set block_id = '" . $block_id . "' %}\n";
-        $injected_vars .= "{% set seasons_data = " . $seasons_json . " %}\n";
-        $injected_vars .= "{% set session = " . $session_json . " %}\n";
-        $injected_vars .= "{% set competitions_data = " . $competition_json . " %}\n";
-        $injected_vars .= "{% set grades_data = " . $grades_json . " %}\n";
-        $injected_vars .= "{% set matches_data = " . $matches_json . " %}\n";
-        $injected_vars .= "{% set matches_html = \"" . $matches_html_escaped . "\" %}\n";
-        $injected_vars .= "{% set ladders_html = \"" . $ladders_html_escaped . "\" %}\n";
-        
-        return $injected_vars . $template;
+        if (!is_array($schedule)) {
+            return null;
+        }
+        $first = isset($schedule[0]) ? $schedule[0] : $schedule;
+        $value = $first['dateTime'] ?? $first['date'] ?? null;
+        $timestamp = $value ? strtotime($value) : false;
+        return $timestamp === false ? null : $timestamp;
     }
 
     static function defaultCss()
@@ -544,6 +586,7 @@ class Gamezone extends \Breakdance\Elements\Element
 
     static function propertyPathsToSsrElementWhenValueChanges()
     {
-        return false;
+        // Re-render in the builder when Display / Matches to Display / Heading change
+        return ['content'];
     }
 }

@@ -1,61 +1,82 @@
 %%SELECTOR%% {
+padding:0 2rem;
+width:100%  
 }
+
+
+
+
 
 /* Header Styles */
 %%SELECTOR%% .gamezone__header {
-  margin-bottom: 1.5rem;
+  background-color: #44B63B1A;
+    line-height: 1.2;
+    padding: 16px;
+    border: 1.5px solid #44b63b;
+    border-radius: 1px;
+    font-style: italic;
+    text-transform: uppercase;
+    color:#FFF;
+    margin-bottom: 0
 }
 
 %%SELECTOR%% .gamezone__header.has-icon {
   display: flex;
   align-items: center;
   gap: 1rem;
+  margin-right:auto
 }
 
 %%SELECTOR%% .gamezone__header-icon {
-  width: 2.5rem;
-  height: 2.5rem;
+  width: 24px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 %%SELECTOR%% .gamezone__title {
-  font-size: 1.5rem;
-  font-weight: 700;
-  margin: 0;
-  color: #333;
+    line-height: 1;
+    font-size: 35px;
+    font-style: italic;
+    text-transform: uppercase;
+    color:#FFF
 }
 
-/* Selectors Container */
-%%SELECTOR%% .gamezone__selectors {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
-  margin-bottom: 2rem;
+
+@media(max-width:1599px){
+%%SELECTOR%%{
+    max-width: 1170px;
+    margin-left:auto;
+     margin-right:auto
+  }
 }
 
-/* Select Dropdowns */
-%%SELECTOR%% .gamezone__competition-select,
-%%SELECTOR%% .gamezone__grades-select {
-  width: 100%;
-  padding: 0.75rem 1rem;
-  font-size: 1rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  background-color: #fff;
-  cursor: pointer;
-  transition: border-color 0.3s ease;
+@media(max-width:1279px){
+  %%SELECTOR%%{
+   max-width:900px;
+  }
 }
 
-%%SELECTOR%% .gamezone__competition-select:hover,
-%%SELECTOR%% .gamezone__grades-select:hover {
-  border-color: #999;
+@media(max-width:1199px){
+  %%SELECTOR%% .gamezone__title{
+  font-size:30px;
+  }
 }
 
-%%SELECTOR%% .gamezone__competition-select:focus,
-%%SELECTOR%% .gamezone__grades-select:focus {
-  outline: none;
-  border-color: #0066cc;
-  box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
+@media(max-width:767px){
+  %%SELECTOR%% .gamezone__title{
+  font-size:26px;
+  }
 }
+
+@media(max-width:479px){
+%%SELECTOR%% {
+padding:0 15px;
+}
+}
+
+
+
+
+
